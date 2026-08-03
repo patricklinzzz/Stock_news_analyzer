@@ -140,10 +140,21 @@ def run_backtest():
         return
 
     overall_corr = merged["news_count"].corr(merged["next_day_return"])
+
+    # 只算相關係數不夠,還要算 p-value 才知道這個數字是不是巧合。
+    # p-value < 0.05 通常視為「統計上顯著」,但樣本數少時這個判斷本身也不可靠,
+    # 這就是為什麼一定要累積夠多天數的原因。
+    from scipy.stats import pearsonr
+
+    try:
+        _, p_value = pearsonr(merged["news_count"], merged["next_day_return"])
+    except ValueError:
+        p_value = float("nan")  # 資料變異度不足(例如news_count全部相同)時算不出來
+
     print(f"\n=== 整體相關係數(所有股票合併計算) ===")
-    print(f"新聞量 vs 隔日報酬率: {overall_corr:.4f}")
-    print("(數值接近 0 代表沒什麼關聯,越接近 ±1 代表關聯越強;")
-    print(" 但樣本數少的時候,這個數字本身不太可信,只能當方向性參考)")
+    print(f"新聞量 vs 隔日報酬率: {overall_corr:.4f} (p-value: {p_value:.4f})")
+    print("(相關係數接近 0 代表沒什麼關聯;p-value 才是判斷「這個數字可不可信」的關鍵:")
+    print(" p-value < 0.05 且樣本數夠多(建議至少 30 筆以上),才值得認真看待這個相關係數)")
 
     print(f"\n=== 各股票明細(依新聞量排序前10筆) ===")
     print(merged.sort_values("news_count", ascending=False).head(10).to_string(index=False))
@@ -168,7 +179,8 @@ def run_backtest():
                 "n_days_covered": n_days,
                 "n_stocks": len(stock_ids),
                 "n_samples": len(merged),
-                "overall_correlation": round(overall_corr, 4),
+                "overall_correlation": round(overall_corr, 4) if pd.notna(overall_corr) else float("nan"),
+                "p_value": round(p_value, 4) if pd.notna(p_value) else float("nan"),
             }
         ]
     )

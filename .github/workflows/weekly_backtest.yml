@@ -22,7 +22,7 @@ jobs:
           python-version: "3.12"
 
       - name: 安裝套件
-        run: pip install pandas yfinance
+        run: pip install pandas yfinance scipy
 
       - name: 執行回測分析
         run: python backtest_analysis.py
