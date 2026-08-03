@@ -18,15 +18,16 @@
 
 ```
 .
-├── stock_news_analyzer.py       # 主程式:抓新聞、去重、比對股票、寫入DB
-├── backtest_analysis.py         # 回測分析:新聞量 vs 股價報酬的相關性驗證
-├── news.db                      # SQLite資料庫(自動產生,每天累積)
-├── backtest_results/            # 回測結果(自動產生)
-│   ├── backtest_YYYY-MM-DD.csv  #   每次執行的完整資料快照
-│   └── summary_log.csv          #   長期追蹤用的相關係數/p-value歷史記錄
+├── stock_news_analyzer.py         # 主程式:抓新聞、去重、比對股票、寫入DB
+├── backtest_analysis.py           # 回測分析:新聞量 vs 股價報酬的相關性驗證
+├── find_unmatched_companies_v2.py # 輔助工具:找出常上新聞但還沒被涵蓋的公司
+├── news.db                        # SQLite資料庫(自動產生,每天累積)
+├── backtest_results/              # 回測結果(自動產生)
+│   ├── backtest_YYYY-MM-DD.csv    #   每次執行的完整資料快照
+│   └── summary_log.csv            #   長期追蹤用的相關係數/p-value歷史記錄
 └── .github/workflows/
-    ├── fetch_news.yml           # 排程:每個交易日自動抓新聞
-    └── weekly_backtest.yml      # 排程:每週自動跑一次回測分析
+    ├── fetch_news.yml             # 排程:每個交易日自動抓新聞
+    └── weekly_backtest.yml        # 排程:每週自動跑一次回測分析
 ```
 
 ---
@@ -57,6 +58,19 @@
 - `backtest_results/backtest_YYYY-MM-DD.csv`:當次完整資料快照
 - `backtest_results/summary_log.csv`:每次執行新增一列,長期累積成趨勢記錄
 
+### 3. 擴充股票對照表覆蓋率(`find_unmatched_companies_v2.py`)
+
+股票對照表不是加越多越好(詳見下方「已知限制」),但清單裡缺漏常上新聞的公司還是要補。這支工具用來找出候選名單:
+
+1. 從證交所免費、不需申請金鑰的官方 OpenAPI 抓「全部上市公司基本資料」(`https://mopsfin.twse.com.tw/opendata/t187ap03_L.csv`)
+2. 排除掉已經在對照表裡的股票
+3. 拿官方公司名稱去比對「完全沒被比對到任何股票」的新聞標題
+4. 印出出現次數夠多、且尚未涵蓋的公司候選,附上範例標題
+
+因為是跟官方登記名稱比對,不是用詞頻猜測,所以不會出現「反彈」「分析師」這類雜訊詞。但**仍需要人工確認**,原因是公司簡稱可能跟其他實體(尤其是外國公司)撞名——例如台股代號 5007 的「三星」,新聞裡若提到的其實是韓國三星電子,直接加進對照表會造成誤判,汙染後續的回測資料。
+
+> 目前只涵蓋「上市」公司,不含「上櫃」,之後可視需求擴充串接櫃買中心(TPEx)的對應 OpenAPI。
+
 ---
 
 ## 快速開始
@@ -75,6 +89,9 @@ python stock_news_analyzer.py
 
 # 跑回測分析(建議累積至少2-3週資料再執行,不然結果不可信)
 python backtest_analysis.py
+
+# 找出常上新聞但還沒被涵蓋的公司候選(建議累積1-2週資料後再跑)
+python find_unmatched_companies_v2.py
 ```
 
 ### 自動化(GitHub Actions)
@@ -110,7 +127,9 @@ repo 裡已經放好兩個排程:
 ## 已知限制
 
 - 股票比對用純字串比對,沒有做中文分詞,別名清單刻意避開太短、太通用的字詞以降低誤判,但仍可能有漏抓或誤判的情況
+- 公司簡稱可能跟其他實體(尤其外國公司)撞名,擴充對照表時需人工確認情境,不能只看出現頻率就直接加入(參考 `find_unmatched_companies_v2.py` 的說明)
 - 新聞來源目前只有 3 個,覆蓋率有限,尤其是非權值股的相關新聞可能抓不到
+- 股票對照表目前只涵蓋「上市」公司,不含「上櫃」
 - 回測邏輯只驗證「新聞量」這個最陽春的訊號,還沒有做情緒分析、事件分類等更細緻的處理
 - `news.db` 用 SQLite 並直接 commit 進 git repo,規模變大之後(例如累積超過一年)可能需要換成其他儲存方案
 
