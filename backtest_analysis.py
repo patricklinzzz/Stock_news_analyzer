@@ -177,8 +177,13 @@ def run_backtest():
         combined = pd.concat([existing, summary_row], ignore_index=True)
     else:
         combined = summary_row
-    combined.to_csv(summary_path, index=False)
+    combined.to_csv(summary_path, index=False, na_rep="NaN")
     print(f"歷史相關係數趨勢已更新到 {summary_path}")
+    if pd.isna(overall_corr):
+        print(
+            "  (本次 overall_correlation 為 NaN:通常是因為 news_count 目前都相同、"
+            "沒有變異,數學上算不出相關係數。資料累積更多天後會自然改善。)"
+        )
 
 
 if __name__ == "__main__":
