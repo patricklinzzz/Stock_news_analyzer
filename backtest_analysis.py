@@ -143,9 +143,37 @@ def run_backtest():
     print(f"\n=== 各股票明細(依新聞量排序前10筆) ===")
     print(merged.sort_values("news_count", ascending=False).head(10).to_string(index=False))
 
-    # 存下合併後的資料,方便之後累積更多天數再重新分析
-    merged.to_csv("backtest_data.csv", index=False)
-    print(f"\n完整資料已存到 backtest_data.csv,共 {len(merged)} 筆")
+    # 存檔:每次執行存一份帶日期的完整快照,方便回頭比對某一週的細節
+    import os
+
+    os.makedirs("backtest_results", exist_ok=True)
+    today_str = datetime.now().date().isoformat()
+    snapshot_path = f"backtest_results/backtest_{today_str}.csv"
+    merged.to_csv(snapshot_path, index=False)
+    print(f"\n本次完整資料已存到 {snapshot_path},共 {len(merged)} 筆")
+
+    # 同時維護一份「每次執行的相關係數」歷史記錄,方便長期追蹤訊號是否穩定
+    summary_path = "backtest_results/summary_log.csv"
+    summary_row = pd.DataFrame(
+        [
+            {
+                "run_date": today_str,
+                "data_start_date": str(daily_counts["date"].min()),
+                "data_end_date": str(daily_counts["date"].max()),
+                "n_days_covered": n_days,
+                "n_stocks": len(stock_ids),
+                "n_samples": len(merged),
+                "overall_correlation": round(overall_corr, 4),
+            }
+        ]
+    )
+    if os.path.exists(summary_path):
+        existing = pd.read_csv(summary_path)
+        combined = pd.concat([existing, summary_row], ignore_index=True)
+    else:
+        combined = summary_row
+    combined.to_csv(summary_path, index=False)
+    print(f"歷史相關係數趨勢已更新到 {summary_path}")
 
 
 if __name__ == "__main__":
