@@ -83,6 +83,11 @@ def fetch_price_returns(stock_ids: list[str], start_date, end_date) -> pd.DataFr
             print(f"[WARN] {ticker} 沒有資料(可能是上櫃股,試試 .TWO)")
             continue
 
+        # 新版 yfinance 對單一股票下載時,欄位可能回傳成 MultiIndex
+        # (例如 ('Close', '2330.TW')),要攤平成單層才能正常合併資料。
+        if isinstance(hist.columns, pd.MultiIndex):
+            hist.columns = hist.columns.get_level_values(0)
+
         hist = hist.reset_index()
         hist["stock_id"] = stock_id
         hist["date"] = pd.to_datetime(hist["Date"]).dt.date
