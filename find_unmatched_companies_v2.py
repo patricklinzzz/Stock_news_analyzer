@@ -39,14 +39,27 @@ HEADERS = {
     )
 }
 
-# 目前 stock_news_analyzer.py 裡已經涵蓋的股票代號,避免重複建議
-# (偷懶直接複製代號列表,懶得跨檔案 import 也可以接受,反正只是拿來排除用)
-ALREADY_COVERED_IDS = {
-    "2330", "2317", "2454", "2308", "2382", "2379", "3231", "2303", "2412",
-    "2881", "2882", "2891", "1301", "1303", "2002", "3008", "2201", "6505",
-    "2886", "2603", "6669", "2356", "2376", "2357", "3037", "2408", "2609",
-    "2615", "3711", "2383", "2345", "2887", "2327", "2368", "7769", "2449",
-    "2344","5534","6491","2301","2313","2801",
+# 已涵蓋的股票代號直接從 stock_news_analyzer.py 動態載入,
+# 不再手動維護重複清單,避免像這次一樣兩邊對不上、要手動同步。
+from stock_news_analyzer import load_stock_mapping
+
+ALREADY_COVERED_IDS = {s["stock_id"] for s in load_stock_mapping()}
+
+# 公司簡稱剛好是日常生活常用詞,純字串比對容易大量誤判,先擋掉。
+# 遇到新的類似案例(某公司簡稱剛好撞到常用詞),往這裡加即可。
+GENERIC_WORD_BLOCKLIST = {
+    "統一",  # 統一(1216) vs. "統一發票"、"撮合統一"等一般用語
+    "全新",  # 全新(2455) vs. "全新的"這種形容詞用法
+    "冠軍",  # 冠軍電子(1806) vs. "銷量冠軍"這種一般用語
+    "全台",  # 全台食品(3038) vs. "全台灣"這種地理範圍用語
+    "中華",  # 中華(2204) vs. "中華郵政"等其他機構名稱
+}
+
+# 已經人工review過、確認「不該加進對照表」的股票代號。
+# 跟 ALREADY_COVERED_IDS 不一樣:那邊是「已經加了」,這裡是「看過但故意不加」,
+# 沒有這份清單的話,同一檔股票會一直重複出現在候選名單裡,每次都要重新判斷一次。
+REJECTED_STOCK_IDS = {
+    "5007",  # 三星:新聞裡指的幾乎都是韓國三星電子,不是台股這檔同名公司
 }
 
 
@@ -75,6 +88,33 @@ def fetch_twse_company_list() -> pd.DataFrame:
     raise RuntimeError("無法解析證交所公司清單,欄位格式可能已變更,需要人工檢查")
 
 
+def strip_source_suffix(title: str) -> str:
+    """
+    新聞標題結尾常帶著來源名稱,例如「... - Yahoo股市」「...｜豐雲學堂」,
+    如果來源名稱剛好撞到某檔股票簡稱(例如「東森」),比對時會誤判成
+    這則新聞在講該公司。這裡把結尾的「來源標記」去掉,只留正文比對。
+
+    規則:找標題裡最後一個分隔符( - 或 ｜ ),如果分隔符後面的文字夠短
+    (<=20字,通常來源名稱都很短),就視為來源標記並移除。
+    """
+    separators = [" - ", "｜", " | "]
+    best_idx = -1
+    best_sep_len = 0
+    for sep in separators:
+        idx = title.rfind(sep)
+        if idx > best_idx:
+            best_idx = idx
+            best_sep_len = len(sep)
+
+    if best_idx == -1:
+        return title
+
+    suffix = title[best_idx + best_sep_len:]
+    if 0 < len(suffix) <= 20:
+        return title[:best_idx]
+    return title
+
+
 def get_unmatched_titles(db_path: str = DB_PATH) -> list[str]:
     with sqlite3.connect(db_path) as conn:
         cur = conn.execute(
@@ -89,9 +129,12 @@ def get_unmatched_titles(db_path: str = DB_PATH) -> list[str]:
 def find_candidates(titles: list[str], company_df: pd.DataFrame) -> list[tuple[str, str, int, list[str]]]:
     """
     回傳 [(股票代號, 公司簡稱, 出現則數, 範例標題), ...],依頻率排序。
-    只檢查「還沒在對照表裡」的公司,並過濾掉名稱太短(<=1字,容易誤判)的資料。
+    只檢查「還沒在對照表裡」的公司,並過濾掉名稱太短(<=1字,容易誤判)
+    或撞到通用詞(見 GENERIC_WORD_BLOCKLIST)的資料。
+    比對前會先去除標題結尾的來源名稱,避免來源名稱本身撞到股票簡稱。
     """
     candidates = []
+    cleaned_titles = [(t, strip_source_suffix(t)) for t in titles]
 
     for _, row in company_df.iterrows():
         stock_id = str(row["stock_id"]).strip()
@@ -99,10 +142,14 @@ def find_candidates(titles: list[str], company_df: pd.DataFrame) -> list[tuple[s
 
         if stock_id in ALREADY_COVERED_IDS:
             continue
+        if stock_id in REJECTED_STOCK_IDS:
+            continue
         if len(name) < 2:  # 太短的公司簡稱容易到處誤判,跳過
             continue
+        if name in GENERIC_WORD_BLOCKLIST:
+            continue
 
-        matched_titles = [t for t in titles if name in t]
+        matched_titles = [orig for orig, cleaned in cleaned_titles if name in cleaned]
         if len(matched_titles) >= MIN_FREQUENCY:
             candidates.append((stock_id, name, len(matched_titles), matched_titles[:3]))
 
