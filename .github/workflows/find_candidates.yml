@@ -1,0 +1,42 @@
+name: 每週偵測未涵蓋公司候選
+
+on:
+  schedule:
+    # 每週二台灣時間 09:00(UTC 01:00)執行,跟回測分析錯開一天
+    - cron: "0 1 * * 2"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write  # 需要這個權限才能開Issue通知候選名單
+
+jobs:
+  find-candidates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 設定 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安裝套件
+        run: pip install requests pandas
+
+      - name: 執行候選公司偵測
+        run: python find_unmatched_companies_v2.py > candidates_output.txt 2>&1 || true
+
+      - name: 檢查有沒有找到候選,有的話開Issue通知
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if grep -q "候選公司" candidates_output.txt; then
+            gh issue create \
+              --title "待審核:新聞候選公司清單 $(date -u +%Y-%m-%d)" \
+              --body-file candidates_output.txt
+            echo "已開Issue通知候選公司"
+          else
+            echo "本次沒有找到符合條件的候選公司,略過"
+          fi
