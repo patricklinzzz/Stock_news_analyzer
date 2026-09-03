@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台股新聞訊號儀表板</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #12151C;
+    --bg-raised: #191D27;
+    --border: #262B38;
+    --text: #E8E6E1;
+    --text-muted: #8B92A0;
+    --gold: #D4A24C;
+    --green: #4CAF7D;
+    --red: #E2574C;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Noto Sans TC", "PingFang TC", sans-serif;
+    line-height: 1.6;
+  }
+  .mono { font-family: "SF Mono", "Consolas", "Roboto Mono", monospace; }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+  header {
+    margin-bottom: 36px;
+  }
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .updated {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+  .hero {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 24px;
+    margin-bottom: 28px;
+  }
+  .hero-headline {
+    font-size: 1.05rem;
+    margin-bottom: 20px;
+    padding-left: 12px;
+    border-left: 3px solid var(--gold);
+  }
+  .hero-headline.positive { border-left-color: var(--green); }
+  .hero-headline.negative { border-left-color: var(--text-muted); }
+  .stat-row {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    flex: 1;
+    min-width: 120px;
+  }
+  .stat-label {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    margin-bottom: 4px;
+  }
+  .stat-value {
+    font-size: 1.6rem;
+    font-weight: 600;
+  }
+  .progress-bar {
+    margin-top: 20px;
+  }
+  .progress-track {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    background: var(--gold);
+    height: 100%;
+    transition: width 0.3s;
+  }
+  .progress-label {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    margin-top: 6px;
+  }
+  section {
+    margin-bottom: 32px;
+  }
+  h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: none;
+    margin: 0 0 14px;
+  }
+  .chart-box {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 16px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+  th {
+    text-align: right;
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 0.78rem;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  th:first-child, td:first-child { text-align: left; }
+  td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .num { text-align: right; font-family: "SF Mono", "Consolas", "Roboto Mono", monospace; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .muted { color: var(--text-muted); }
+  .muted-row td { color: var(--text-muted); }
+  .sig { font-weight: 700; }
+  .note { font-size: 0.75rem; }
+  footer {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>台股新聞訊號儀表板</h1>
+    <div class="updated mono">最後更新 2026-09-03 13:08</div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-headline negative">樣本數 249 筆,p-value=0.5843,目前沒有統計上顯著的關聯</div>
+    <div class="stat-row">
+      <div class="stat">
+        <div class="stat-label">整體相關係數</div>
+        <div class="stat-value mono">-0.0348</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">p-value</div>
+        <div class="stat-value mono">0.5843</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">樣本數</div>
+        <div class="stat-value mono">249</div>
+      </div>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-track">
+        <div class="progress-fill" style="width: 83%"></div>
+      </div>
+      <div class="progress-label">個股層級可信度門檻進度:249 / 300(83%)</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>相關係數趨勢(每週)</h2>
+    <div class="chart-box">
+      <canvas id="trendChart" height="140"></canvas>
+    </div>
+  </section>
+
+  <section>
+    <h2>個股層級明細(依 p-value 排序,粗體代表 p&lt;0.05,但樣本數普遍偏少,勿直接採信)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>股票代號</th>
+          <th>樣本數</th>
+          <th>相關係數</th>
+          <th>p-value</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+            <tr class="">
+                <td class="mono">2881</td>
+                <td class="num">5</td>
+                <td class="num pos" class="sig">+0.9253</td>
+                <td class="num sig">0.0242</td>
+            </tr>
+            <tr class="">
+                <td class="mono">3008</td>
+                <td class="num">10</td>
+                <td class="num pos">+0.5508</td>
+                <td class="num">0.0989</td>
+            </tr>
+            <tr class="">
+                <td class="mono">2330</td>
+                <td class="num">22</td>
+                <td class="num neg">-0.3181</td>
+                <td class="num">0.1491</td>
+            </tr>
+            <tr class="">
+                <td class="mono">2882</td>
+                <td class="num">5</td>
+                <td class="num pos">+0.7436</td>
+                <td class="num">0.1497</td>
+            </tr>
+            <tr class="">
+                <td class="mono">2408</td>
+                <td class="num">17</td>
+                <td class="num neg">-0.3501</td>
+                <td class="num">0.1683</td>
+            </tr>
+            <tr class="">
+                <td class="mono">3037</td>
+                <td class="num">5</td>
+                <td class="num pos">+0.7007</td>
+                <td class="num">0.1874</td>
+            </tr>
+            <tr class="">
+                <td class="mono">2317</td>
+                <td class="num">18</td>
+                <td class="num neg">-0.2535</td>
+                <td class="num">0.3101</td>
+            </tr>
+            <tr class="">
+                <td class="mono">2301</td>
+                <td class="num">7</td>
+                <td class="num neg">-0.2271</td>
+                <td class="num">0.6243</td>
+            </tr>
+            <tr class="">
+                <td class="mono">2609</td>
+                <td class="num">5</td>
+                <td class="num neg">-0.2951</td>
+                <td class="num">0.6298</td>
+            </tr>
+            <tr class="">
+                <td class="mono">2327</td>
+                <td class="num">14</td>
+                <td class="num neg">-0.1174</td>
+                <td class="num">0.6893</td>
+            </tr>
+            <tr class="">
+                <td class="mono">2308</td>
+                <td class="num">10</td>
+                <td class="num neg">-0.1250</td>
+                <td class="num">0.7308</td>
+            </tr>
+            <tr class="">
+                <td class="mono">3711</td>
+                <td class="num">7</td>
+                <td class="num neg">-0.1538</td>
+                <td class="num">0.7420</td>
+            </tr>
+            <tr class="">
+                <td class="mono">1303</td>
+                <td class="num">17</td>
+                <td class="num pos">+0.0569</td>
+                <td class="num">0.8282</td>
+            </tr>
+            <tr class="">
+                <td class="mono">2454</td>
+                <td class="num">18</td>
+                <td class="num neg">-0.0492</td>
+                <td class="num">0.8461</td>
+            </tr>
+            <tr class="">
+                <td class="mono">2344</td>
+                <td class="num">12</td>
+                <td class="num neg">-0.0535</td>
+                <td class="num">0.8688</td>
+            </tr>
+            <tr class="">
+                <td class="mono">2303</td>
+                <td class="num">10</td>
+                <td class="num pos">+0.0520</td>
+                <td class="num">0.8865</td>
+            </tr>
+            <tr class="">
+                <td class="mono">3231</td>
+                <td class="num">5</td>
+                <td class="num neg">-0.0003</td>
+                <td class="num">0.9996</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2357</td>
+                <td class="num">2</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2356</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2324</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2368</td>
+                <td class="num">2</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2383</td>
+                <td class="num">4</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2382</td>
+                <td class="num">4</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2376</td>
+                <td class="num">2</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2464</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2426</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2409</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2603</td>
+                <td class="num">2</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2059</td>
+                <td class="num">4</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2313</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2002</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">1301</td>
+                <td class="num">2</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2886</td>
+                <td class="num">2</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2884</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2615</td>
+                <td class="num">2</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2801</td>
+                <td class="num">2</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">3006</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2891</td>
+                <td class="num">2</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2890</td>
+                <td class="num">2</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">2889</td>
+                <td class="num">3</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">3026</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">3481</td>
+                <td class="num">4</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">3532</td>
+                <td class="num">2</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">6213</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">6239</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">6446</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">6472</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">6491</td>
+                <td class="num">1</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">6669</td>
+                <td class="num">2</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+            <tr class="muted-row">
+                <td class="mono">6770</td>
+                <td class="num">4</td>
+                <td class="num muted">— <span class="note">樣本數<5,略過計算</span></td>
+                <td class="num muted">—</td>
+            </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    資料每週自動更新(GitHub Actions)。本頁面僅供研究與學習用途,任何相關係數、統計結果不構成投資建議。
+  </footer>
+
+</div>
+
+<script>
+const ctx = document.getElementById('trendChart').getContext('2d');
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: ["2026-08-03", "2026-08-03", "2026-08-04", "2026-08-10", "2026-08-17", "2026-08-24", "2026-08-31"],
+    datasets: [{
+      label: '相關係數',
+      data: [null, -0.535, -0.0663, -0.1566, -0.1051, -0.0331, -0.0348],
+      borderColor: '#D4A24C',
+      backgroundColor: 'rgba(212,162,76,0.08)',
+      tension: 0.25,
+      pointRadius: 4,
+      pointBackgroundColor: '#D4A24C',
+      spanGaps: true,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          afterLabel: function(context) {
+            const samples = [5, 7, 12, 63, 116, 184, 249];
+            return 'n_samples: ' + samples[context.dataIndex];
+          }
+        }
+      }
+    },
+    scales: {
+      y: {
+        grid: { color: '#262B38' },
+        ticks: { color: '#8B92A0' },
+      },
+      x: {
+        grid: { display: false },
+        ticks: { color: '#8B92A0' },
+      }
+    }
+  }
+});
+</script>
+
+</body>
+</html>
